@@ -3,73 +3,71 @@ pipeline {
 
     environment {
         DOCKER_IMAGE_TAG = 'pro'
-        DOCKER_REGISTRY_PUSH_URL = '38.55.97.233:5000' // Docker私有仓库的推送URL
-        DOCKER_REGISTRY_PULL_URL = '38.55.97.233:5001' // Docker私有仓库的拉取URL
         DOCKER_IMAGE = 'tool-ai-demo'  // 要构建和推送的 Docker 镜像名称
         DOCKER_CONTAINER = 'tool-ai-demo'
-        DOCKER_CREDENTIALS_ID = 'docker-registry-credentials'
-        REMOTE_HOST = '38.55.97.233'
-        REMOTE_SSH_PORT = '22'
-        DEPLOY_USERNAME = 'root'
-        DEPLOY_PASSWORD = 'yhxeBZiQBu0G'
+        // REMOTE_HOST = '38.55.97.233'
+        // REMOTE_SSH_PORT = '22'
+        // DEPLOY_USERNAME = 'root'
+        // DEPLOY_PASSWORD = 'yhxeBZiQBu0G'
     }
 
     stages {
-        stage('Verify Docker') {
-            steps {
-                sh 'docker version >/dev/null 2>&1 || { echo "Docker not found"; exit 1; }'
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                // 构建 Docker 镜像
-                sh 'docker build -t $DOCKER_REGISTRY_PUSH_URL/$DOCKER_IMAGE:$DOCKER_IMAGE_TAG  -f Dockerfile .'
-            }
-        }
-        stage('Publish Image') {
+        stage('Checkout') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY_PUSH_URL'
-                        sh 'docker push $DOCKER_REGISTRY_PUSH_URL/$DOCKER_IMAGE:$DOCKER_IMAGE_TAG'
-                    }
+                    echo "Building from branch: ${params.git_branch}"
+                    
+                    // Jenkins已经自动检出了代码，我们只需要验证
+                    sh '''
+                        echo "=== 验证代码检出 ==="
+                        echo "当前目录: $(pwd)"
+                        echo "文件列表:"
+                        ls -la
+                        echo "Dockerfile检查:"
+                        if [ -f "Dockerfile" ]; then
+                            echo "✅ Dockerfile存在"
+                            echo "当前分支: $(git branch --show-current 2>/dev/null || echo '无法获取分支')"
+                        else
+                            echo "❌ Dockerfile不存在"
+                            exit 1
+                        fi
+                    '''
                 }
             }
         }
-        stage('Deploy') {
+        
+        stage('Diagnose') {
             steps {
                 script {
-                    // 定义远程服务器的SSH凭证
-                    def remoteServer = [
-                        remoteHost: REMOTE_HOST,
-                        sshPort: 22
-                    ]
-
-                    // 定义镜像名称
-                    def image = DOCKER_REGISTRY_PULL_URL+'/'+DOCKER_IMAGE+':'+DOCKER_IMAGE_TAG
-
-                    // 使用用户名和密码登录
-                    def USERNAME = DEPLOY_USERNAME
-                    def PASSWORD = DEPLOY_PASSWORD
-                    // 检查并停止旧容器
-                    def container_id = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker ps -a | awk \"/${DOCKER_CONTAINER}/ {print \\\$1}\"'", returnStdout: true).trim()
-                    if (container_id) {
-                        echo "[DOCKER] 停止并删除已经启动的容器"
-                        sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker stop ${container_id}'"
-                        sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rm ${container_id}'"
-                    }
-
-                    // 检查镜像是否存在并删除镜像（使用 docker inspect 避免 $ 转义问题）
-                    def image_exists = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker image inspect ${image} >/dev/null 2>&1'", returnStatus: true) == 0
-                    if (image_exists) {
-                        echo "[DOCKER] 镜像存在，执行删除操作..."
-                        sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rmi ${image}'"
-                    } else {
-                        echo "[DOCKER] 镜像不存在，无需删除。"
-                    }
-                    echo "[DOCKER-COMPOSE] 重新启动容器"
-                    // 重新部署容器
-                    sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker-compose -f /workspace/docker/docker-compose.yml up -d --build ${DOCKER_CONTAINER}'"
+                    echo "=== 诊断信息 ==="
+                    sh 'echo "当前工作目录: $(pwd)"'
+                    sh 'echo "Jenkins工作空间: $WORKSPACE"'
+                    sh 'echo "环境变量WORKSPACE_DIR: $WORKSPACE_DIR"'
+                    sh 'echo "当前Git分支: $(git branch --show-current 2>/dev/null || echo "无法获取分支信息")"'
+                    sh 'echo "Git远程分支列表:"'
+                    sh 'git branch -r 2>/dev/null || echo "无法获取远程分支"'
+                    sh 'ls -la'
+                    sh 'echo "查找Dockerfile:"'
+                    sh 'find . -name "Dockerfile" -type f -exec echo "找到: {}" \\;'
+                    sh 'test -f Dockerfile && echo "✅ Dockerfile存在" || echo "❌ Dockerfile不存在"'
+                    sh 'echo "Dockerfile内容预览:"'
+                    sh 'head -5 Dockerfile 2>/dev/null || echo "无法读取Dockerfile"'
+                }
+            }
+        }
+        
+        stage('Build & Deploy') {
+            steps {
+                script {
+                    // 停止并删除旧容器
+                    sh 'docker stop $DOCKER_CONTAINER 2>/dev/null || true'
+                    sh 'docker rm $DOCKER_CONTAINER 2>/dev/null || true'
+                    
+                    // 构建新镜像
+                    sh 'docker build --no-cache -t $DOCKER_IMAGE .'
+                    
+                    // 启动新容器
+                    sh 'docker run -d --name $DOCKER_CONTAINER -p 9080:9080 -e MYSQL_HOST=$MYSQL_HOST -e MYSQL_PORT=$MYSQL_PORT $DOCKER_IMAGE'
                 }
             }
         }
