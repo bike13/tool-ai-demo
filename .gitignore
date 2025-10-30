@@ -1,0 +1,13 @@
+# .gitignore
+
+# Python virtual environment
+.venv/
+venv/
+
+
+# Test directory
+test/
+
+# 数据目录
+data/  
+
