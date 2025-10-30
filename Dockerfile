@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # 安装Python依赖
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# RUN pip install --no-cache-dir --upgrade pip 
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY . .
