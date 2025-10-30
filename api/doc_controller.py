@@ -536,6 +536,7 @@ class DocumentProcessor:
                         self.openai_client.chat.completions.create,
                         model=self.tmag_to_text_model,
                         messages=messages,
+                        reasoning_effort="low",
                         temperature=0.3
                     )
                     response = await loop.run_in_executor(None, future.result)
