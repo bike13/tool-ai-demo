@@ -75,14 +75,14 @@ def setup_logging():
 root_logger = setup_logging()
 
 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # 精确到毫秒
-root_logger.info(f"{timestamp} [ss-log] [MainThread] INFO [prompt-word-optimization.logger] 应用启动，测试Graylog日志输出", extra={
-    'app_name': 'prompt-word-optimization',
+root_logger.info(f"{timestamp} [ss-log] [MainThread] INFO [tool-server.logge] 应用启动，测试Graylog日志输出", extra={
+    'app_name': 'tool-server',
     'env': 'test',
     'level': 6,
     'level_name': 'INFO',
     'log_type': 'Python',
-    'logger_name': 'prompt-word-optimization.logger',
-    'marker': 'AI-AGENT',
+    'logger_name': 'tool-server.logger',
+    'marker': 'TOOL-SERVER',
     'thread_name': 'MainThread',
     'timestamp': timestamp
 })

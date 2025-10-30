@@ -536,7 +536,12 @@ class DocumentProcessor:
                         self.openai_client.chat.completions.create,
                         model=self.tmag_to_text_model,
                         messages=messages,
-                        reasoning_effort="low",
+                        # INSERT_YOUR_CODE
+                        # reasoning_effort 支持的模式包括: "auto", "none", "low", "medium", "high"
+                        # 通常用于控制大模型（如 GPT-4V 或其它多模态模型）推理时的深度/复杂度。
+                        # 详见 OpenAI 官方 API 文档说明。
+                        reasoning_effort="auto",
+                        # INSERT_YOUR_CODE               
                         temperature=0.3
                     )
                     response = await loop.run_in_executor(None, future.result)
