@@ -17,7 +17,7 @@ pipeline {
     stages {
         stage('Verify Docker') {
             steps {
-                sh 'docker version || which docker || echo "Docker not found" && exit 1'
+                sh 'docker version >/dev/null 2>&1 || { echo "Docker not found"; exit 1; }'
             }
         }
         stage('Build Docker Image') {
@@ -59,9 +59,8 @@ pipeline {
                         sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rm ${container_id}'"
                     }
 
-                    // 检查镜像是否存在并删除镜像（使用 awk 精确匹配，避免 GString 中 $ 转义问题）
-                    def checkCmd = "docker images --format \"{{.Repository}}:{{.Tag}}\" | awk -v img=\"${image}\" '\\$0==img {f=1} END{exit f?0:1}'"
-                    def image_exists = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} '${checkCmd}'", returnStatus: true) == 0
+                    // 检查镜像是否存在并删除镜像（使用 docker inspect 避免 $ 转义问题）
+                    def image_exists = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker image inspect ${image} >/dev/null 2>&1'", returnStatus: true) == 0
                     if (image_exists) {
                         echo "[DOCKER] 镜像存在，执行删除操作..."
                         sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rmi ${image}'"
