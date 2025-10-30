@@ -5,6 +5,12 @@ pipeline {
         string(name: 'git_branch', defaultValue: 'main', description: 'Git branch to build')
     }
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
     environment {
         DOCKER_IMAGE = 'tool-ai-demo:pro'
         DOCKER_CONTAINER = 'tool-ai-app'
@@ -19,21 +25,29 @@ pipeline {
                 script {
                     echo "Building from branch: ${params.git_branch}"
                     
-                    // Jenkins已经自动检出了代码，我们只需要验证
-                    sh '''
-                        echo "=== 验证代码检出 ==="
+                    // 使用参数切换到指定分支并同步最新代码
+                    sh """
+                        set -e
+                        echo "=== 拉取并切换分支 ==="
                         echo "当前目录: $(pwd)"
-                        echo "文件列表:"
-                        ls -la
+                        git fetch --all --prune || true
+                        if git show-ref --verify --quiet refs/heads/${params.git_branch}; then
+                          git checkout ${params.git_branch}
+                        else
+                          git checkout -b ${params.git_branch} origin/${params.git_branch} || git checkout -b ${params.git_branch}
+                        fi
+                        git pull --ff-only origin ${params.git_branch} || true
+
+                        echo "=== 验证代码检出 ==="
+                        echo "当前分支: $(git branch --show-current 2>/dev/null || echo '无法获取分支')"
                         echo "Dockerfile检查:"
                         if [ -f "Dockerfile" ]; then
                             echo "✅ Dockerfile存在"
-                            echo "当前分支: $(git branch --show-current 2>/dev/null || echo '无法获取分支')"
                         else
                             echo "❌ Dockerfile不存在"
                             exit 1
                         fi
-                    '''
+                    """
                 }
             }
         }
@@ -46,6 +60,7 @@ pipeline {
                     sh 'echo "Jenkins工作空间: $WORKSPACE"'
                     sh 'echo "环境变量WORKSPACE_DIR: $WORKSPACE_DIR"'
                     sh 'echo "当前Git分支: $(git branch --show-current 2>/dev/null || echo "无法获取分支信息")"'
+                    sh 'echo "Git远程URL: $(git config --get remote.origin.url || echo "未知")"'
                     sh 'echo "Git远程分支列表:"'
                     sh 'git branch -r 2>/dev/null || echo "无法获取远程分支"'
                     sh 'ls -la'
@@ -69,7 +84,7 @@ pipeline {
                     sh 'docker build --no-cache -t $DOCKER_IMAGE .'
                     
                     // 启动新容器
-                    sh 'docker run -d --name $DOCKER_CONTAINER -p 8000:8000 -e MYSQL_HOST=$MYSQL_HOST -e MYSQL_PORT=$MYSQL_PORT $DOCKER_IMAGE'
+                    sh 'docker run -d --name $DOCKER_CONTAINER -p 8000:8000 $DOCKER_IMAGE'
                 }
             }
         }
