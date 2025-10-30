@@ -4,9 +4,10 @@ pipeline {
     environment {
         DOCKER_IMAGE_TAG = 'pro'
         DOCKER_REGISTRY_PUSH_URL = '38.55.97.233:5000' // Docker私有仓库的推送URL
-        DOCKER_REGISTRY_PULL_URL = '38.55.97.233.240:5001' // Docker私有仓库的拉取URL
+        DOCKER_REGISTRY_PULL_URL = '38.55.97.233:5001' // Docker私有仓库的拉取URL
         DOCKER_IMAGE = 'tool-ai-demo'  // 要构建和推送的 Docker 镜像名称
         DOCKER_CONTAINER = 'tool-ai-demo'
+        DOCKER_CREDENTIALS_ID = 'docker-registry-credentials'
         REMOTE_HOST = '38.55.97.233'
         REMOTE_SSH_PORT = '22'
         DEPLOY_USERNAME = 'root'
@@ -53,8 +54,9 @@ pipeline {
                         sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rm ${container_id}'"
                     }
 
-                    // 检查镜像是否存在并删除镜像
-                    def image_exists = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker images --format \"{{.Repository}}:{{.Tag}}\" | grep -q \"^${image}\\$\"'", returnStatus: true) == 0
+                    // 检查镜像是否存在并删除镜像（使用 awk 精确匹配，避免 GString 中 $ 转义问题）
+                    def checkCmd = "docker images --format \"{{.Repository}}:{{.Tag}}\" | awk -v img=\"${image}\" '\$0==img {f=1} END{exit f?0:1}'"
+                    def image_exists = sh(script: "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} '${checkCmd}'", returnStatus: true) == 0
                     if (image_exists) {
                         echo "[DOCKER] 镜像存在，执行删除操作..."
                         sh "sshpass -p '${PASSWORD}' ssh -o StrictHostKeyChecking=no ${USERNAME}@${remoteServer.remoteHost} -p ${remoteServer.sshPort} 'docker rmi ${image}'"
